@@ -19,8 +19,13 @@ const simpleLightbox = new SimpleLightbox('.gallery a', {
 async function onSearch(evt) {
   evt.preventDefault();
   pixabayApi.page = 1;
+  pixabayApi.request = evt.currentTarget.searchQuery.value.trim();
 
-  pixabayApi.request = evt.currentTarget.elements.searchQuery.value;
+  if (pixabayApi.request === '') {
+    Notify.failure(`Add search data!`);
+    return;
+  }
+
   evt.currentTarget.reset();
   galleryEl.innerHTML = '';
 
@@ -28,12 +33,21 @@ async function onSearch(evt) {
     const data = await pixabayApi.getPhotos();
     console.log('Search:', data);
 
-    saysNotFound(data);
+    pixabayApi.totalImages = data.hits.length;
+
+    if (!data.totalHits) {
+      Notify.failure(
+        `Sorry, there are no images matching your search query. Please try again.`
+      );
+    } else {
+      btnloadMoreEl.classList.remove('is-hidden');
+      removeBtnLoadMore(data);
+    }
     makeMarkup(data);
-    sumLoadImages(data);
     addSimpleLightbox();
   } catch (error) {
     console.warn(error);
+    getCatch();
   }
 }
 
@@ -44,13 +58,29 @@ async function onloadMore() {
     const data = await pixabayApi.getPhotos();
     console.log('Load:', data);
 
+    pixabayApi.totalImages += data.hits.length;
+
     makeMarkup(data);
-    sumLoadImages(data);
-    saysInfoLoad(data);
     addSimpleLightbox();
     addSmoothScroling();
+    removeBtnLoadMore(data);
+
+    Notify.info(`Hooray! We found ${data.totalHits} images.`);
   } catch (error) {
     console.warn(error);
+    getCatch();
+  }
+}
+
+function removeBtnLoadMore(data) {
+  if (pixabayApi.totalImages === data.total) {
+    Notify.success(
+      `We're sorry, but you've reached the end of search results.`
+    );
+
+    btnloadMoreEl.classList.add('is-hidden');
+
+    return;
   }
 }
 
@@ -88,36 +118,6 @@ function createPhotoCard(data) {
 function makeMarkup(data) {
   galleryEl.insertAdjacentHTML('beforeend', createPhotoCard(data));
 }
-// функция суммирует количество показанных картинок
-function sumLoadImages(data) {
-  return (pixabayApi.totalImages += data.hits.length);
-}
-
-// функция сообщает про отсутствие запрашиваемых изображений
-function saysNotFound(data) {
-  if (!data.hits.length) {
-    return Notify.failure(
-      'Sorry, there are no images matching your search query. Please try again.'
-    );
-  }
-
-  btnloadMoreEl.classList.remove('is-hidden');
-}
-
-// функция сообщает о финале всех загруженных картинок
-function saysInfoLoad(data) {
-  if (pixabayApi.totalImages === data.total) {
-    Notify.failure(
-      `We're sorry, but you've reached the end of search results.`
-    );
-
-    btnloadMoreEl.classList.add('is-hidden');
-
-    return;
-  }
-
-  Notify.info(`Hooray! We found ${data.totalHits} images.`);
-}
 
 // функция добавляет библиотеку simpleLightbox
 function addSimpleLightbox() {
@@ -133,4 +133,8 @@ function addSmoothScroling() {
     top: cardHeight * 2,
     behavior: 'smooth',
   });
+}
+
+function getCatch() {
+  return Notify.success(`Data not loaded, please try again.`);
 }
